@@ -228,7 +228,8 @@ def signup():
     else:
         return jsonify(status="error", message="must supply user 'name', 'email' and 'password' as parameters"), 400
 
-    send_confirmation(name, email)
+    if app.config['SEND_CONFIRMATION_EMAILS']:
+        send_confirmation(name, email)
 
     if user_id:
         user = db.get_user(user_id)
