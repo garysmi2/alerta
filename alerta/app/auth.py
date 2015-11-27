@@ -258,10 +258,11 @@ def send_confirmation(name, email):
     confirm_hash = make_hash(40)
     db.set_user_hash(email, confirm_hash)
 
-    text = 'Hello {name},\n' \
+    text = 'Hello {name}!\n\n' \
            'Please verify your email address is {email} by clicking on the link below:\n\n' \
            '{url}/{hash}\n\n' \
-           'If you are not {name} you can ignore this email.'.format(
+           'You\'re receiving this email because you recently created a new Alerta account.' \
+           ' If this wasn\'t you, please ignore this email.'.format(
                name=name, email=email, url=request.base_url.replace('signup', 'confirm'), hash=confirm_hash)
 
     msg_text = MIMEText(text, 'plain', 'utf-8')
