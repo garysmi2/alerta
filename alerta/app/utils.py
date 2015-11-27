@@ -1,7 +1,12 @@
+import os
 import json
 import datetime
 import pytz
 import re
+
+import base64
+import hmac
+import hashlib
 
 from functools import wraps
 from flask import request, g, current_app
@@ -21,6 +26,7 @@ correlate_timer = Timer('alerts', 'correlate', 'Correlated alerts', 'Total time 
 create_timer = Timer('alerts', 'create', 'Newly created alerts', 'Total time to process number of new alerts')
 pre_plugin_timer = Timer('plugins', 'prereceive', 'Pre-receive plugins', 'Total number of pre-receive plugins')
 post_plugin_timer = Timer('plugins', 'postreceive', 'Post-receive plugins', 'Total number of post-receive plugins')
+
 
 class DateEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -243,4 +249,13 @@ def process_alert(incomingAlert):
             raise RuntimeError('Error while running post-receive plug-in: %s' % str(e))
         post_plugin_timer.stop_timer(started)
 
-    return alert
+
+def make_hash(length):
+
+    try:
+        random = str(os.urandom(32)).encode('utf-8')  # python 3
+    except UnicodeDecodeError:
+        random = str(os.urandom(32))  # python 2
+    digest = hmac.new(app.config['SECRET_KEY'].encode('utf-8'), msg=random, digestmod=hashlib.sha256).digest()
+
+    return base64.urlsafe_b64encode(digest).decode('utf-8')[:length]

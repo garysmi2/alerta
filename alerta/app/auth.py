@@ -6,12 +6,17 @@ import bcrypt
 
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import g, request, redirect
+from flask import g, request, render_template
 from flask_cors import cross_origin
 from jwt import DecodeError, ExpiredSignature, InvalidAudience
 from base64 import urlsafe_b64decode
 from requests_oauthlib import OAuth1
 from uuid import uuid4
+
+import smtplib
+import socket
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 try:
     from urllib.parse import parse_qsl, urlencode
@@ -20,7 +25,7 @@ except ImportError:
     from urllib import urlencode
 
 from alerta.app import app, db
-from alerta.app.utils import jsonify, jsonp, DateEncoder
+from alerta.app.utils import jsonify, DateEncoder, make_hash
 
 BASIC_AUTH_REALM = "Alerta"
 
@@ -60,6 +65,9 @@ def create_token(user, name, login, provider=None, customer=None, role='user'):
 
     if app.config['CUSTOMER_VIEWS']:
         payload['customer'] = customer
+
+    if provider == 'basic':
+        payload['email_verified'] = db.is_email_verified(login)
 
     token = jwt.encode(payload, key=app.config['SECRET_KEY'], json_encoder=DateEncoder)
     return token.decode('unicode_escape')
@@ -214,11 +222,13 @@ def signup():
         provider = request.json.get("provider", "basic")
         text = request.json.get("text", "")
         try:
-            user_id = db.save_user(str(uuid4()), name, email, password, provider, text)
+            user_id = db.save_user(str(uuid4()), name, email, password, provider, text, verified=False)
         except Exception as e:
             return jsonify(status="error", message=str(e)), 500
     else:
         return jsonify(status="error", message="must supply user 'name', 'email' and 'password' as parameters"), 400
+
+    send_confirmation(name, email)
 
     if user_id:
         user = db.get_user(user_id)
@@ -235,6 +245,55 @@ def signup():
 
     token = create_token(user['id'], user['name'], email, provider='basic', customer=customer, role=role(email))
     return jsonify(token=token)
+
+
+def send_confirmation(name, email):
+
+    msg = MIMEMultipart('related')
+    msg['Subject'] = "[Alerta] Please verify your email '%s'" % email
+    msg['From'] = app.config['MAIL_FROM']
+    msg['To'] = email
+    msg.preamble = "[Alerta] Please verify your email '%s'" % email
+
+    confirm_hash = make_hash(40)
+    db.set_user_hash(email, confirm_hash)
+
+    text = 'Hello {name},\n' \
+           'Please verify your email address is {email} by clicking on the link below:\n\n' \
+           '{url}/{hash}\n\n' \
+           'If you are not {name} you can ignore this email.'.format(
+               name=name, email=email, url=request.base_url.replace('signup', 'confirm'), hash=confirm_hash)
+
+    msg_text = MIMEText(text, 'plain', 'utf-8')
+    msg.attach(msg_text)
+
+    try:
+        mx = smtplib.SMTP(app.config['SMTP_HOST'], app.config['SMTP_PORT'])
+        if app.config['DEBUG']:
+            mx.set_debuglevel(True)
+        mx.ehlo()
+        mx.starttls()
+        mx.login(app.config['MAIL_FROM'], app.config['SMTP_PASSWORD'])
+        mx.sendmail(app.config['MAIL_FROM'], [email], msg.as_string())
+        mx.close()
+    except (socket.error, socket.herror, socket.gaierror), e:
+        app.logger.error('Mail server connection error: %s', e)
+        return
+    except smtplib.SMTPException, e:
+        app.logger.error('Failed to send email : %s', e)
+    except Exception as e:
+        print str(e)
+
+
+@app.route('/auth/confirm/<hash>', methods=['GET'])
+def verify_email(hash):
+
+    email = db.is_hash_valid(hash)
+    if email:
+        db.validate_user(email)
+        return render_template('auth/verify_success.html', email=email)
+    else:
+        return render_template('auth/verify_failed.html')
 
 
 @app.route('/auth/google', methods=['OPTIONS', 'POST'])

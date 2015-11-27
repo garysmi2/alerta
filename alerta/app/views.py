@@ -7,13 +7,14 @@ from uuid import uuid4
 from alerta.app import app, db
 from alerta.app.switch import Switch
 from alerta.app.auth import auth_required, admin_required
-from alerta.app.utils import jsonify, jsonp, parse_fields, process_alert
+from alerta.app.utils import jsonify, jsonp, parse_fields
 from alerta.app.metrics import Timer
 from alerta.alert import Alert
 from alerta.heartbeat import Heartbeat
-from alerta.plugins import RejectException
-
+from alerta.plugins import load_plugins, RejectException
 LOG = app.logger
+
+plugins = load_plugins()
 
 # Set-up metrics
 gets_timer = Timer('alerts', 'queries', 'Alert queries', 'Total time to process number of alert queries')
@@ -22,6 +23,49 @@ delete_timer = Timer('alerts', 'deleted', 'Deleted alerts', 'Total time to proce
 status_timer = Timer('alerts', 'status', 'Alert status change', 'Total time and number of alerts with status changed')
 tag_timer = Timer('alerts', 'tagged', 'Tagging alerts', 'Total time to tag number of alerts')
 untag_timer = Timer('alerts', 'untagged', 'Removing tags from alerts', 'Total time to un-tag number of alerts')
+duplicate_timer = Timer('alerts', 'duplicate', 'Duplicate alerts', 'Total time to process number of duplicate alerts')
+correlate_timer = Timer('alerts', 'correlate', 'Correlated alerts', 'Total time to process number of correlated alerts')
+create_timer = Timer('alerts', 'create', 'Newly created alerts', 'Total time to process number of new alerts')
+
+
+def process_alert(incomingAlert):
+
+    for plugin in plugins:
+        try:
+            incomingAlert = plugin.pre_receive(incomingAlert)
+        except RejectException:
+            raise
+        except Exception as e:
+            raise RuntimeError('Error while running pre-receive plug-in: %s' % str(e))
+        if not incomingAlert:
+            raise SyntaxError('Plug-in pre-receive hook did not return modified alert')
+
+    if db.is_blackout_period(incomingAlert):
+        raise RuntimeWarning('Suppressed during blackout period')
+
+    try:
+        if db.is_duplicate(incomingAlert):
+            started = duplicate_timer.start_timer()
+            alert = db.save_duplicate(incomingAlert)
+            duplicate_timer.stop_timer(started)
+        elif db.is_correlated(incomingAlert):
+            started = correlate_timer.start_timer()
+            alert = db.save_correlated(incomingAlert)
+            correlate_timer.stop_timer(started)
+        else:
+            started = create_timer.start_timer()
+            alert = db.create_alert(incomingAlert)
+            create_timer.stop_timer(started)
+    except Exception as e:
+        raise RuntimeError(e)
+
+    for plugin in plugins:
+        try:
+            plugin.post_receive(alert)
+        except Exception as e:
+            raise RuntimeError('Error while running post-receive plug-in: %s' % str(e))
+
+    return alert
 
 
 @app.route('/_', methods=['OPTIONS', 'PUT', 'POST', 'DELETE', 'GET'])

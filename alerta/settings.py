@@ -47,6 +47,11 @@ CORS_SUPPORTS_CREDENTIALS = AUTH_REQUIRED
 
 BLACKOUT_DURATION = 3600  # default period = 1 hour
 
+SMTP_HOST = 'smtp.gmail.com'
+SMTP_PORT = 587
+SMTP_PASSWORD = ''  # application-specific password
+MAIL_FROM = 'noreply@alerta.io'
+
 # Plug-ins
 PLUGINS = ['reject']
 # PLUGINS = ['amqp', 'enhance', 'logstash', 'normalise', 'reject', 'sns']

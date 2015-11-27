@@ -7,7 +7,8 @@ from flask.ext.cors import cross_origin
 
 from alerta.app import app, db
 from alerta.alert import Alert
-from alerta.app.utils import jsonify, jsonp, process_alert
+from alerta.app.utils import jsonify, jsonp
+from alerta.app.views import process_alert
 from alerta.app.metrics import Timer
 from alerta.plugins import RejectException
 
