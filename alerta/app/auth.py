@@ -202,6 +202,10 @@ def login():
     if app.config['EMAIL_VERIFICATION'] and not db.is_email_verified(email):
         return jsonify(status="error", message="email address %s has not been verified" % email), 401
 
+    if app.config['AUTH_REQUIRED'] and not ('*' in app.config['ALLOWED_EMAIL_DOMAINS']
+            or email.split('@')[1] in app.config['ALLOWED_EMAIL_DOMAINS']):
+        return jsonify(status="error", message="User %s is not authorized" % email), 403
+
     if app.config['CUSTOMER_VIEWS']:
         try:
             customer = customer_match(email, groups=[email.split('@')[1]])
@@ -241,6 +245,10 @@ def signup():
         send_confirmation(name, email)
         if not db.is_email_verified(email):
             return jsonify(status="error", message="email address %s has not been verified" % email), 401
+
+    if app.config['AUTH_REQUIRED'] and not ('*' in app.config['ALLOWED_EMAIL_DOMAINS']
+            or email.split('@')[1] in app.config['ALLOWED_EMAIL_DOMAINS']):
+        return jsonify(status="error", message="User %s is not authorized" % email), 403
 
     if user_id:
         user = db.get_user(user_id)
