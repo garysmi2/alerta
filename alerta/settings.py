@@ -47,7 +47,7 @@ CORS_SUPPORTS_CREDENTIALS = AUTH_REQUIRED
 
 BLACKOUT_DURATION = 3600  # default period = 1 hour
 
-SEND_CONFIRMATION_EMAILS = False
+EMAIL_VERIFICATION = False
 SMTP_HOST = 'smtp.gmail.com'
 SMTP_PORT = 587
 MAIL_FROM = 'your@gmail.com'  # replace with valid sender address

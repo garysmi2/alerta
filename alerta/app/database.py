@@ -1105,7 +1105,7 @@ class Mongo(object):
         if login:
             return bool(self._db.users.find_one({"login": login}))
 
-    def save_user(self, id, name, login, password=None, provider="", text="", verified=False):
+    def save_user(self, id, name, login, password=None, provider="", text="", email_verified=False):
 
         if self.is_user_valid(login=login):
             return
@@ -1117,7 +1117,7 @@ class Mongo(object):
             "createTime": datetime.datetime.utcnow(),
             "provider": provider,
             "text": text,
-            "email_verified": verified
+            "email_verified": email_verified
         }
 
         if password:
@@ -1169,7 +1169,7 @@ class Mongo(object):
 
     def is_email_verified(self, login):
 
-        return self._db.users.find_one({'login': login}, projection={"email_verified": 1, "_id": 0})['email_verified']
+        return self._db.users.find_one({'login': login}, projection={"email_verified": 1, "_id": 0}).get('email_verified', False)
 
     def delete_user(self, id):
 

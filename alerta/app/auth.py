@@ -204,6 +204,12 @@ def login():
             customer = customer_match(email, groups=[email.split('@')[1]])
         except NoCustomerMatch:
             return jsonify(status="error", message="No customer lookup defined for user %s" % email), 403
+
+    if app.config['EMAIL_VERIFICATION'] and not db.is_email_verified(email):
+        return jsonify(status="error", message="email address has not been verified")
+
+    if email in app.config['ADMIN_USERS']:
+        role = 'admin'
     else:
         customer = None
 
@@ -222,14 +228,16 @@ def signup():
         provider = request.json.get("provider", "basic")
         text = request.json.get("text", "")
         try:
-            user_id = db.save_user(str(uuid4()), name, email, password, provider, text, verified=False)
+            user_id = db.save_user(str(uuid4()), name, email, password, provider, text, email_verified=False)
         except Exception as e:
             return jsonify(status="error", message=str(e)), 500
     else:
         return jsonify(status="error", message="must supply user 'name', 'email' and 'password' as parameters"), 400
 
-    if app.config['SEND_CONFIRMATION_EMAILS']:
+    if app.config['EMAIL_VERIFICATION']:
         send_confirmation(name, email)
+        if not db.is_email_verified(email):
+            return jsonify(status="error", message="email address has not been verified")
 
     if user_id:
         user = db.get_user(user_id)
