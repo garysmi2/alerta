@@ -29,6 +29,8 @@ from alerta.app.utils import jsonify, DateEncoder, make_hash
 
 BASIC_AUTH_REALM = "Alerta"
 
+LOG = app.logger
+
 
 class AuthError(Exception):
     pass
@@ -298,12 +300,12 @@ def send_confirmation(name, email):
         mx.sendmail(app.config['MAIL_FROM'], [email], msg.as_string())
         mx.close()
     except (socket.error, socket.herror, socket.gaierror) as e:
-        app.logger.error('Mail server connection error: %s', str(e))
+        LOG.error('Mail server connection error: %s', str(e))
         return
     except smtplib.SMTPException as e:
-        app.logger.error('Failed to send email : %s', str(e))
+        LOG.error('Failed to send email : %s', str(e))
     except Exception as e:
-        print str(e)
+        LOG.error('Unhandled exception: %s', str(e))
 
 
 @app.route('/auth/confirm/<hash>', methods=['GET'])
