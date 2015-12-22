@@ -289,11 +289,11 @@ def send_confirmation(name, email):
         mx.login(app.config['MAIL_FROM'], app.config['SMTP_PASSWORD'])
         mx.sendmail(app.config['MAIL_FROM'], [email], msg.as_string())
         mx.close()
-    except (socket.error, socket.herror, socket.gaierror), e:
-        app.logger.error('Mail server connection error: %s', e)
+    except (socket.error, socket.herror, socket.gaierror) as e:
+        app.logger.error('Mail server connection error: %s', str(e))
         return
-    except smtplib.SMTPException, e:
-        app.logger.error('Failed to send email : %s', e)
+    except smtplib.SMTPException as e:
+        app.logger.error('Failed to send email : %s', str(e))
     except Exception as e:
         print str(e)
 
