@@ -213,12 +213,6 @@ def login():
             customer = customer_match(email, groups=[email.split('@')[1]])
         except NoCustomerMatch:
             return jsonify(status="error", message="No customer lookup defined for user %s" % email), 403
-
-    if app.config['EMAIL_VERIFICATION'] and not db.is_email_verified(email):
-        return jsonify(status="error", message="email address has not been verified")
-
-    if email in app.config['ADMIN_USERS']:
-        role = 'admin'
     else:
         customer = None
 
