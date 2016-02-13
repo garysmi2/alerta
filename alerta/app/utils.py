@@ -193,7 +193,7 @@ def parse_fields(r):
     return query, sort, group, page, limit, query_time
 
 
-def process_alert(incomingAlert):
+def process_alert(incomingAlert, tenant):
 
     for plugin in plugins:
         started = pre_plugin_timer.start_timer()
@@ -213,21 +213,21 @@ def process_alert(incomingAlert):
             raise SyntaxError('Plug-in pre-receive hook did not return modified alert')
         pre_plugin_timer.stop_timer(started)
 
-    if db.is_blackout_period(incomingAlert):
+    if db.is_blackout_period(incomingAlert, tenant):
         raise RuntimeWarning('Suppressed during blackout period')
 
     try:
-        if db.is_duplicate(incomingAlert):
+        if db.is_duplicate(incomingAlert, tenant):
             started = duplicate_timer.start_timer()
-            alert = db.save_duplicate(incomingAlert)
-            duplicate_timer.stop_timer(started)
-        elif db.is_correlated(incomingAlert):
+            alert = db.save_duplicate(incomingAlert, tenant)
+            duplicate_timer.stop_timer(started, tenant)
+        elif db.is_correlated(incomingAlert, tenant):
             started = correlate_timer.start_timer()
-            alert = db.save_correlated(incomingAlert)
+            alert = db.save_correlated(incomingAlert, tenant)
             correlate_timer.stop_timer(started)
         else:
             started = create_timer.start_timer()
-            alert = db.create_alert(incomingAlert)
+            alert = db.create_alert(incomingAlert, tenant)
             create_timer.stop_timer(started)
     except Exception as e:
         error_counter.inc()
@@ -244,3 +244,16 @@ def process_alert(incomingAlert):
         post_plugin_timer.stop_timer(started)
 
     return alert
+
+def getTenant(message):
+
+    tenant = ''
+
+    try:
+        tenant = message['tenant']
+    except (KeyError, TypeError) as e:
+        return False
+
+    tenant = tenant.strip()
+
+    return tenant

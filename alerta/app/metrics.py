@@ -145,6 +145,7 @@ class Counter(object):
 class Timer(object):
 
     def __init__(self, group, name, title=None, description=None, count=0, total_time=0):
+        self.db = Mongo().get_db();
 
         self.group = group
         self.name = name
@@ -164,11 +165,14 @@ class Timer(object):
 
         return self._time_in_millis()
 
-    def stop_timer(self, start, count=1):
+    def stop_timer(self, start, count=1, tenant="alerta-monitoring"):
+        d = Mongo().get_db()
+
+        dBase = d._client[tenant]
 
         now = self._time_in_millis()
 
-        r = db.metrics.find_one_and_update(
+        r = dBase.metrics.find_one_and_update(
             {
                 "group": self.group,
                 "name": self.name

@@ -7,7 +7,7 @@ from uuid import uuid4
 from alerta.app import app, db
 from alerta.app.switch import Switch
 from alerta.app.auth import auth_required, admin_required
-from alerta.app.utils import jsonify, jsonp, parse_fields, process_alert
+from alerta.app.utils import jsonify, jsonp, parse_fields, process_alert, getTenant
 from alerta.app.metrics import Timer
 from alerta.alert import Alert
 from alerta.heartbeat import Heartbeat
@@ -49,11 +49,11 @@ def index():
     return render_template('index.html', rules=rules)
 
 
-@app.route('/alerts', methods=['OPTIONS', 'GET'])
+@app.route("/alerts", methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_alerts():
+def get_alerts(tenant):
 
     gets_started = gets_timer.start_timer()
     try:
@@ -177,7 +177,20 @@ def get_history():
 @jsonp
 def receive_alert():
 
+    tenant = ''
+    content = ''
+
     recv_started = receive_timer.start_timer()
+
+    content = request.get_json(silent=True)
+
+    tenant = getTenant(content)
+
+    if not tenant or len(tenant) is 0:
+        return jsonify(status="error", message="Missing mandatory value for tenant"), 400
+
+    tenant = "tenant-" + content["tenant"] + "-alerts"
+
     try:
         incomingAlert = Alert.parse_alert(request.data)
     except ValueError as e:
@@ -193,7 +206,7 @@ def receive_alert():
        incomingAlert.attributes.update(ip=request.remote_addr)
 
     try:
-        alert = process_alert(incomingAlert)
+        alert = process_alert(incomingAlert, tenant)
     except RejectException as e:
         receive_timer.stop_timer(recv_started)
         return jsonify(status="error", message=str(e)), 403
@@ -245,6 +258,8 @@ def set_status(id):
 
     status_started = status_timer.start_timer()
     data = request.json
+
+    print data
 
     if data and 'status' in data:
         try:

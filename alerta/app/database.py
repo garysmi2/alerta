@@ -105,15 +105,15 @@ class Mongo(object):
 
     def get_db(self):
 
-        return self._db
+        return self
 
     def get_info(self):
 
-        return self._db.name
+       return "unset"
 
     def get_version(self):
 
-        return self._db.client.server_info()['version']
+        return "unset"
 
     def get_severity(self, alert):
         """
@@ -136,10 +136,12 @@ class Mongo(object):
 
         return self._db.alerts.find_one(query, projection={"severity": 1, "_id": 0})['severity']
 
-    def get_status(self, alert):
+    def get_status(self, alert, tenant):
         """
         Get status of correlated or duplicate alert. Used to determine previous status.
         """
+        dBase = self._client[tenant]
+
         query = {
             "environment": alert.environment,
             "resource": alert.resource,
@@ -154,7 +156,7 @@ class Mongo(object):
             "customer": alert.customer
         }
 
-        return self._db.alerts.find_one(query, projection={"status": 1, "_id": 0})['status']
+        return dBase.alerts.find_one(query, projection={"status": 1, "_id": 0})['status']
 
     def get_count(self, query=None):
         """
@@ -274,7 +276,8 @@ class Mongo(object):
                 )
         return history
 
-    def is_duplicate(self, alert):
+    def is_duplicate(self, alert, tenant):
+        dBase = self._client[tenant]
 
         query = {
             "environment": alert.environment,
@@ -284,9 +287,11 @@ class Mongo(object):
             "customer": alert.customer
         }
 
-        return bool(self._db.alerts.find_one(query))
+        return bool(dBase.alerts.find_one(query))
 
-    def is_correlated(self, alert):
+    def is_correlated(self, alert, tenant):
+
+        dBase = self._client[tenant]
 
         query = {
             "environment": alert.environment,
@@ -303,15 +308,16 @@ class Mongo(object):
             "customer": alert.customer
         }
 
-        return bool(self._db.alerts.find_one(query))
+        return bool(dBase.alerts.find_one(query))
 
-    def save_duplicate(self, alert):
+    def save_duplicate(self, alert, tenant):
         """
         Update alert value, text and rawData, increment duplicate count and set repeat=True, and
         keep track of last receive id and time but don't append to history unless status changes.
         """
+        dBase = self._client[tenant]
 
-        previous_status = self.get_status(alert)
+        previous_status = self.get_status(alert, tenant)
         if alert.status != status_code.UNKNOWN and alert.status != previous_status:
             status = alert.status
         else:
@@ -350,7 +356,7 @@ class Mongo(object):
             }
 
         LOG.debug('Update duplicate alert in database: %s', update)
-        response = self._db.alerts.find_one_and_update(
+        response = dBase.alerts.find_one_and_update(
             query,
             update=update,
             projection={"history": 0},
@@ -387,11 +393,12 @@ class Mongo(object):
             history=list()
         )
 
-    def save_correlated(self, alert):
+    def save_correlated(self, alert, tenant):
         """
         Update alert key attributes, reset duplicate count and set repeat=False, keep track of last
         receive id and time, appending all to history. Append to history again if status changes.
         """
+        dBase = self._client[tenant]
 
         previous_severity = self.get_severity(alert)
         previous_status = self.get_status(alert)
@@ -458,7 +465,7 @@ class Mongo(object):
             })
 
         LOG.debug('Update correlated alert in database: %s', update)
-        response = self._db.alerts.find_one_and_update(
+        response = dBase.alerts.find_one_and_update(
             query,
             update=update,
             projection={"history": 0},
@@ -495,7 +502,9 @@ class Mongo(object):
             history=list()
         )
 
-    def create_alert(self, alert):
+    def create_alert(self, alert, tenant):
+
+        dBase = self._client[tenant]
 
         trend_indication = severity_code.trend(severity_code.UNKNOWN, alert.severity)
         if alert.status == status_code.UNKNOWN:
@@ -553,7 +562,7 @@ class Mongo(object):
 
         LOG.debug('Insert new alert in database: %s', alert)
 
-        response = self._db.alerts.insert_one(alert)
+        response = dBase.alerts.insert_one(alert)
 
         if not response:
             return
@@ -712,7 +721,7 @@ class Mongo(object):
 
         return True if response.deleted_count == 1 else False
 
-    def get_counts(self, query=None, fields=None, group=None):
+    def get_counts(self, tenant, query=None, fields=None, group=None):
         """
         Return counts grouped by severity or status.
         """
@@ -847,9 +856,10 @@ class Mongo(object):
 
         return blackouts
 
-    def is_blackout_period(self, alert):
+    def is_blackout_period(self, alert, tenant):
 
         now = datetime.datetime.utcnow()
+        dBase = self._client[tenant]
 
         query = dict()
         query['startTime'] = {'$lte': now}
@@ -913,7 +923,7 @@ class Mongo(object):
             }
         ]
 
-        if self._db.blackouts.find_one(query):
+        if dBase.blackouts.find_one(query):
             return True
 
         return False
