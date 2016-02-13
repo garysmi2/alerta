@@ -177,19 +177,15 @@ def get_history():
 @jsonp
 def receive_alert():
 
-    tenant = ''
-    content = ''
-
     recv_started = receive_timer.start_timer()
 
-    content = request.get_json(silent=True)
+    data = request.json
+    tenant = getTenant(data)
 
-    tenant = getTenant(content)
-
-    if not tenant or len(tenant) is 0:
+    if len(tenant) is 0:
         return jsonify(status="error", message="Missing mandatory value for tenant"), 400
 
-    tenant = "tenant-" + content["tenant"] + "-alerts"
+    tenant = "tenant-" + tenant + "-alerts"
 
     try:
         incomingAlert = Alert.parse_alert(request.data)
@@ -255,15 +251,18 @@ def get_alert(id):
 def set_status(id):
 
     # FIXME - should only allow role=user to set status for alerts for that customer
-
+    # Above comment is from original code, can ignore it for now
     status_started = status_timer.start_timer()
-    data = request.json
 
-    print data
+    data = request.json
+    tenant = getTenant(data)
+
+    if len(tenant) is 0:
+        return jsonify(status="error", message= "missing request parameter tenant"), 400
 
     if data and 'status' in data:
         try:
-            alert = db.set_status(id=id, status=data['status'], text=data.get('text', ''))
+            alert = db.set_status(tenant, id=id, status=data['status'], text=data.get('text', ''))
         except Exception as e:
             return jsonify(status="error", message=str(e)), 500
     else:
@@ -285,13 +284,19 @@ def set_status(id):
 def tag_alert(id):
 
     # FIXME - should only allow role=user to set status for alerts for that customer
+    # Above comment is from original code, can ignore for now
 
     tag_started = tag_timer.start_timer()
+
     data = request.json
+    tenant = getTenant(data)
+
+    if len(tenant) is 0:
+        return jsonify(status="error", message= "missing request parameter tenant"), 400
 
     if data and 'tags' in data:
         try:
-            response = db.tag_alert(id, data['tags'])
+            response = db.tag_alert(id, tenant, data['tags'])
         except Exception as e:
             return jsonify(status="error", message=str(e)), 500
     else:
@@ -312,13 +317,21 @@ def tag_alert(id):
 def untag_alert(id):
 
     # FIXME - should only allow role=user to set status for alerts for that customer
+    # Above comment is from original code, can ignore for now
 
     untag_started = untag_timer.start_timer()
     data = request.json
 
+    tenant = getTenant(data)
+
+    if len(tenant) is 0:
+        return jsonify(status="error", message= "missing request parameter tenant"), 400
+
+    tenant = "tenant-" + tenant + "-alerts"
+
     if data and 'tags' in data:
         try:
-            response = db.untag_alert(id, data['tags'])
+            response = db.untag_alert(id, tenant, data['tags'])
         except Exception as e:
             return jsonify(status="error", message=str(e)), 500
     else:
@@ -332,26 +345,27 @@ def untag_alert(id):
         return jsonify(status="error", message="not found"), 404
 
 
-@app.route('/alert/<id>', methods=['OPTIONS', 'DELETE', 'POST'])
+@app.route('/alert/<tenant>/<id>', methods=['OPTIONS', 'DELETE', 'POST'])
 @cross_origin()
 @auth_required
 @admin_required
 @jsonp
-def delete_alert(id):
+def delete_alert(tenant,id):
 
-    if (request.method == 'DELETE' or
-            (request.method == 'POST' and '_method' in request.json and request.json['_method'] == 'delete')):
-        started = delete_timer.start_timer()
-        try:
-            response = db.delete_alert(id)
-        except Exception as e:
-            return jsonify(status="error", message=str(e)), 500
-        delete_timer.stop_timer(started)
+    started = delete_timer.start_timer()
 
-        if response:
-            return jsonify(status="ok")
-        else:
-            return jsonify(status="error", message="not found"), 404
+    tenant = "tenant-" + tenant + "-alerts"
+
+    try:
+        response = db.delete_alert(tenant,id)
+    except Exception as e:
+        return jsonify(status="error", message=str(e)), 500
+    delete_timer.stop_timer(started)
+
+    if response:
+        return jsonify(status="ok")
+    else:
+        return jsonify(status="error", message="not found"), 404
 
 
 # Return severity and status counts
@@ -526,6 +540,15 @@ def get_blackouts():
 @jsonp
 def create_blackout():
 
+    data = request.json
+
+    tenant = getTenant(data)
+
+    if len(tenant) is 0:
+        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
+
+    tenant = "tenant-" + tenant + "-alerts"
+
     if request.json and 'environment' in request.json:
         environment = request.json['environment']
     else:
@@ -546,30 +569,34 @@ def create_blackout():
         end_time = datetime.datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%S.%fZ')
 
     try:
-        blackout = db.create_blackout(environment, resource, service, event, group, tags, start_time, end_time, duration)
+        blackout = db.create_blackout(tenant,environment, resource, service, event, group, tags, start_time, end_time, duration)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
     return jsonify(status="ok", blackout=blackout), 201, {'Location': '%s/%s' % (request.base_url, blackout)}
 
 
-@app.route('/blackout/<path:blackout>', methods=['OPTIONS', 'DELETE', 'POST'])
+@app.route('/blackout/<tenant>/<path:blackout>', methods=['OPTIONS', 'DELETE'])
 @cross_origin()
 @auth_required
 @admin_required
 @jsonp
-def delete_blackout(blackout):
+def delete_blackout(tenant, blackout):
 
-    if request.method == 'DELETE' or (request.method == 'POST' and request.json['_method'] == 'delete'):
-        try:
-            response = db.delete_blackout(blackout)
-        except Exception as e:
-            return jsonify(status="error", message=str(e)), 500
+    if tenant is None or len(tenant.strip()) is 0:
+        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
 
-        if response:
-            return jsonify(status="ok")
-        else:
-            return jsonify(status="error", message="not found"), 404
+    tenant = "tenant-" + tenant + "-alerts"
+
+    try:
+        response = db.delete_blackout(tenant, blackout)
+    except Exception as e:
+        return jsonify(status="error", message=str(e)), 500
+
+    if response:
+        return jsonify(status="ok")
+    else:
+        return jsonify(status="error", message="not found"), 404
 
 
 @app.route('/heartbeats', methods=['OPTIONS', 'GET'])
@@ -614,16 +641,26 @@ def get_heartbeats():
 @jsonp
 def create_heartbeat():
 
+    data = request.json
+    tenant = getTenant(data)
+
+    if len(tenant) is 0:
+        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
+
+    tenant = "tenant-" + tenant + "-alerts"
+
     try:
         heartbeat = Heartbeat.parse_heartbeat(request.data)
     except ValueError as e:
         return jsonify(status="error", message=str(e)), 400
 
+
     if g.get('role', None) != 'admin':
         heartbeat.customer = g.get('customer', None)
 
+
     try:
-        heartbeat = db.save_heartbeat(heartbeat)
+        heartbeat = db.save_heartbeat(tenant, heartbeat)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -632,14 +669,20 @@ def create_heartbeat():
     return jsonify(status="ok", id=heartbeat.id, heartbeat=body), 201, {'Location': '%s/%s' % (request.base_url, heartbeat.id)}
 
 
-@app.route('/heartbeat/<id>', methods=['OPTIONS', 'GET'])
+@app.route('/heartbeat/<tenant>/<id>', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_heartbeat(id):
+def get_heartbeat(tenant,id):
+
+
+    if tenant is None or len(tenant.strip()) is 0:
+        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
+
+    tenant = "tenant-" + tenant + "-alerts"
 
     try:
-        heartbeat = db.get_heartbeat(id=id)
+        heartbeat = db.get_heartbeat(tenant, id=id)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -653,23 +696,27 @@ def get_heartbeat(id):
         return jsonify(status="error", message="not found", total=0, heartbeat=None), 404
 
 
-@app.route('/heartbeat/<id>', methods=['OPTIONS', 'DELETE', 'POST'])
+@app.route('/heartbeat/<tenant>/<id>', methods=['OPTIONS', 'DELETE'])
 @cross_origin()
 @auth_required
 @admin_required
 @jsonp
-def delete_heartbeat(id):
+def delete_heartbeat(tenant, id):
 
-    if request.method == 'DELETE' or (request.method == 'POST' and request.json['_method'] == 'delete'):
-        try:
-            response = db.delete_heartbeat(id)
-        except Exception as e:
-            return jsonify(status="error", message=str(e)), 500
+    if tenant is None or len(tenant.strip()) is 0:
+        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
 
-        if response:
-            return jsonify(status="ok")
-        else:
-            return jsonify(status="error", message="not found"), 404
+    tenant = "tenant-" + tenant + "-alerts"
+
+    try:
+        response = db.delete_heartbeat(tenant, id)
+    except Exception as e:
+        return jsonify(status="error", message=str(e)), 500
+
+    if response:
+        return jsonify(status="ok")
+    else:
+        return jsonify(status="error", message="not found"), 404
 
 
 @app.route('/users', methods=['OPTIONS', 'GET'])

@@ -242,6 +242,7 @@ def process_alert(incomingAlert, tenant):
             post_plugin_timer.stop_timer(started)
             raise RuntimeError('Error while running post-receive plug-in: %s' % str(e))
         post_plugin_timer.stop_timer(started)
+        post_plugin_timer.stop_timer(started)
 
     return alert
 
@@ -252,8 +253,9 @@ def getTenant(message):
     try:
         tenant = message['tenant']
     except (KeyError, TypeError) as e:
-        return False
+        return ""
 
-    tenant = tenant.strip()
-
-    return tenant
+    if tenant is None:
+        return ""
+    else:
+        return tenant.strip()

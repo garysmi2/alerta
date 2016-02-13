@@ -2,7 +2,7 @@
 
 ENDPOINT=${1:-http://localhost:8080}
 
-curl -s -XPOST -H "Content-type: application/json" -H "Authorization: Key demo-key" ${ENDPOINT}/alert -d '
+curl -s -XPOST -H "Content-type: application/json" -H "Authorization: Key demo-key" ${ENDPOINT}/blackout -d '
 {
   "tenant" : "nimbus",
   "resource": "host678:eth0",

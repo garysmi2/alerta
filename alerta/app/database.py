@@ -638,13 +638,20 @@ class Mongo(object):
             history=response['history']
         )
 
-    def set_status(self, id, status, text=None):
+    def set_status(self, tenant, id, status, text=None):
         """
         Set status and update history.
         """
+
+        dBase = self._client[tenant]
+
+        print "set_status " + tenant
+
         query = {'_id': {'$regex': '^' + id}}
 
-        event = self._db.alerts.find_one(query, projection={"event": 1, "_id": 0})['event']
+
+        event = dBase.alerts.find_one(query, projection={"event": 1, "_id": 0})['event']
+
         if not event:
             return False
 
@@ -662,7 +669,7 @@ class Mongo(object):
             }
         }
 
-        response = self._db.alerts.find_one_and_update(
+        response = dBase.alerts.find_one_and_update(
             query,
             update=update,
             projection={"history": 0},
@@ -699,25 +706,31 @@ class Mongo(object):
             history=list()
         )
 
-    def tag_alert(self, id, tags):
+    def tag_alert(self, id, tenant, tags):
         """
         Append tags to tag list. Don't add same tag more than once.
         """
-        response = self._db.alerts.update_one({'_id': {'$regex': '^' + id}}, {'$addToSet': {"tags": {'$each': tags}}})
+        dBase = self._client[tenant]
+
+        response = dBase.alerts.update_one({'_id': {'$regex': '^' + id}}, {'$addToSet': {"tags": {'$each': tags}}})
 
         return response.matched_count > 0
 
-    def untag_alert(self, id, tags):
+    def untag_alert(self, id, tenant, tags):
         """
         Remove tags from tag list.
         """
-        response = self._db.alerts.update_one({'_id': {'$regex': '^' + id}}, {'$pullAll': {"tags": tags}})
+        dBase = self._client[tenant]
+
+        response = dBase.alerts.update_one({'_id': {'$regex': '^' + id}}, {'$pullAll': {"tags": tags}})
 
         return response.matched_count > 0
 
-    def delete_alert(self, id):
+    def delete_alert(self, tenant, id):
 
-        response = self._db.alerts.delete_one({'_id': {'$regex': '^' + id}})
+        dBase = self._client[tenant]
+
+        response = dBase.alerts.delete_one({'_id': {'$regex': '^' + id}})
 
         return True if response.deleted_count == 1 else False
 
@@ -928,9 +941,12 @@ class Mongo(object):
 
         return False
 
-    def create_blackout(self, environment, resource=None, service=None, event=None, group=None, tags=None, start=None, end=None, duration=None):
+    def create_blackout(self, tenant, environment, resource=None, service=None, event=None, group=None, tags=None, start=None, end=None, duration=None):
 
         start = start or datetime.datetime.utcnow()
+
+        dBase = self._client[tenant]
+
         if end:
             duration = int((end - start).total_seconds())
         else:
@@ -965,11 +981,12 @@ class Mongo(object):
             data["priority"] = 7
             data["tags"] = tags
 
-        return self._db.blackouts.insert_one(data).inserted_id
+        return dBase.blackouts.insert_one(data).inserted_id
 
-    def delete_blackout(self, id):
+    def delete_blackout(self, tenant, id):
+        dBase = self._client[tenant]
 
-        response = self._db.blackouts.delete_one({"_id": id})
+        response = dBase.blackouts.delete_one({"_id": id})
 
         return True if response.deleted_count == 1 else False
 
@@ -993,9 +1010,11 @@ class Mongo(object):
             )
         return heartbeats
 
-    def save_heartbeat(self, heartbeat):
+    def save_heartbeat(self, tenant, heartbeat):
 
         now = datetime.datetime.utcnow()
+        dBase = self._client[tenant]
+
         update = {
             #  '$setOnInsert': {"_id": heartbeat.id},
             '$set': {
@@ -1011,10 +1030,10 @@ class Mongo(object):
 
         LOG.debug('Save heartbeat to database: %s', update)
 
-        heartbeat_id = self._db.heartbeats.find_one({"origin": heartbeat.origin}, {})
+        heartbeat_id = dBase.heartbeats.find_one({"origin": heartbeat.origin}, {})
 
         if heartbeat_id:
-            response = self._db.heartbeats.find_one_and_update(
+            response = dBase.heartbeats.find_one_and_update(
                 {"origin": heartbeat.origin},
                 update=update,
                 upsert=True,
@@ -1034,7 +1053,7 @@ class Mongo(object):
         else:
             update = update['$set']
             update["_id"] = heartbeat.id
-            response = self._db.heartbeats.insert_one(update)
+            response = dBase.heartbeats.insert_one(update)
 
             return HeartbeatDocument(
                 id=response.inserted_id,
@@ -1047,14 +1066,16 @@ class Mongo(object):
                 customer=update.get('customer', None)
             )
 
-    def get_heartbeat(self, id):
+    def get_heartbeat(self, tenant, id):
+
+        dBase = self._client[tenant]
 
         if len(id) == 8:
             query = {'$or': [{'_id': {'$regex': '^' + id}}, {'lastReceiveId': {'$regex': '^' + id}}]}
         else:
             query = {'$or': [{'_id': id}, {'lastReceiveId': id}]}
 
-        response = self._db.heartbeats.find_one(query)
+        response = dBase.heartbeats.find_one(query)
         if not response:
             return
 
@@ -1069,9 +1090,11 @@ class Mongo(object):
             customer=response.get('customer', None)
         )
 
-    def delete_heartbeat(self, id):
+    def delete_heartbeat(self,tenant, id):
 
-        response = self._db.heartbeats.delete_one({'_id': {'$regex': '^' + id}})
+        dBase = self._client[tenant]
+
+        response = dBase.heartbeats.delete_one({'_id': {'$regex': '^' + id}})
 
         return True if response.deleted_count == 1 else False
 
