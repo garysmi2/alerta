@@ -11,6 +11,8 @@ from alerta.app.metrics import Counter, Timer
 from alerta.plugins import load_plugins, RejectException
 
 LOG = app.logger
+DB_NAME_PREFIX = "tenant-"
+DB_NAME_SUFFIX = "-alerts"
 
 plugins = load_plugins()
 
@@ -259,3 +261,8 @@ def getTenant(message):
         return ""
     else:
         return tenant.strip()
+
+
+def generateDBName(tenant):
+
+    return DB_NAME_PREFIX + tenant + DB_NAME_SUFFIX

@@ -2,9 +2,8 @@
 
 ENDPOINT=${1:-http://localhost:8080}
 
-curl -s -XPOST -H "Content-type: application/json" -H "Authorization: Key demo-key" ${ENDPOINT}/blackout -d '
+curl -s -XPOST -H "Content-type: application/json" -H "Authorization: Key demo-key" ${ENDPOINT}/blackout/nimbus -d '
 {
-  "tenant" : "nimbus",
   "resource": "host678:eth0",
   "event": "HW:NIC:FAILED",
   "group": "Hardware",

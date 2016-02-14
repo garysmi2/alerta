@@ -164,12 +164,14 @@ class Mongo(object):
         """
         return self._db.alerts.find(query).count()
 
-    def get_alerts(self, query=None, fields=None, sort=None, page=1, limit=0):
+    def get_alerts(self, tenant, query=None, fields=None, sort=None, page=1, limit=0):
+
+        dBase = self._client[tenant]
 
         if 'status' not in query:
             query['status'] = {'$ne': "expired"}
 
-        responses = self._db.alerts.find(query, projection=fields, sort=sort).skip((page-1)*limit).limit(limit)
+        responses = dBase.alerts.find(query, projection=fields, sort=sort).skip((page-1)*limit).limit(limit)
 
         alerts = list()
         for response in responses:
@@ -206,7 +208,9 @@ class Mongo(object):
             )
         return alerts
 
-    def get_history(self, query=None, fields=None, limit=0):
+    def get_history(self, tenant, query=None, fields=None, limit=0):
+
+        dBase = self._client[tenant]
 
         if not fields:
             fields = {
@@ -231,7 +235,7 @@ class Mongo(object):
             {'$sort': {'history.updateTime': 1}}
         ]
 
-        responses = self._db.alerts.aggregate(pipeline)
+        responses = dBase.alerts.aggregate(pipeline)
 
         history = list()
         for response in responses:
@@ -597,14 +601,16 @@ class Mongo(object):
             history=list()
         )
 
-    def get_alert(self, id):
+    def get_alert(self, tenant, id):
+
+        dBase = self._client[tenant]
 
         if len(id) == 8:
             query = {'$or': [{'_id': {'$regex': '^' + id}}, {'lastReceiveId': {'$regex': '^' + id}}]}
         else:
             query = {'$or': [{'_id': id}, {'lastReceiveId': id}]}
 
-        response = self._db.alerts.find_one(query)
+        response = dBase.alerts.find_one(query)
         if not response:
             return
 
@@ -644,8 +650,6 @@ class Mongo(object):
         """
 
         dBase = self._client[tenant]
-
-        print "set_status " + tenant
 
         query = {'_id': {'$regex': '^' + id}}
 
@@ -738,6 +742,8 @@ class Mongo(object):
         """
         Return counts grouped by severity or status.
         """
+        dBase = self._client[tenant]
+
         fields = fields or {}
 
         pipeline = [
@@ -746,7 +752,7 @@ class Mongo(object):
             {'$group': {"_id": "$" + group, "count": {'$sum': 1}}}
         ]
 
-        responses = self._db.alerts.aggregate(pipeline)
+        responses = dBase.alerts.aggregate(pipeline)
 
         counts = dict()
         for response in responses:
@@ -754,7 +760,9 @@ class Mongo(object):
 
         return counts
 
-    def get_topn(self, query=None, group=None, limit=10):
+    def get_topn(self, tenant, query=None, group=None, limit=10):
+
+        dBase = self._client[tenant]
 
         if not group:
             group = "event"  # group by event is nothing specified
@@ -776,7 +784,7 @@ class Mongo(object):
             {'$limit': limit}
         ]
 
-        responses = self._db.alerts.aggregate(pipeline)
+        responses = dBase.alerts.aggregate(pipeline)
 
         top = list()
         for response in responses:
@@ -792,7 +800,9 @@ class Mongo(object):
             )
         return top
 
-    def get_environments(self, query=None, fields=None, limit=0):
+    def get_environments(self, tenant, query=None, fields=None, limit=0):
+
+        dBase = self._client[tenant]
 
         if fields:
             fields['environment'] = 1
@@ -806,7 +816,7 @@ class Mongo(object):
             {'$group': {"_id": "$environment", "count": {'$sum': 1}}}
         ]
 
-        responses = self._db.alerts.aggregate(pipeline)
+        responses = dBase.alerts.aggregate(pipeline)
 
         environments = list()
         for response in responses:
@@ -818,7 +828,9 @@ class Mongo(object):
             )
         return environments
 
-    def get_services(self, query=None, fields=None, limit=0):
+    def get_services(self, tenant, query=None, fields=None, limit=0):
+
+        dBase = self._client[tenant]
 
         if not fields:
             fields = {
@@ -834,7 +846,7 @@ class Mongo(object):
             {'$group': {"_id": {"environment": "$environment", "service": "$service"}, "count": {'$sum': 1}}}
         ]
 
-        responses = self._db.alerts.aggregate(pipeline)
+        responses = dBase.alerts.aggregate(pipeline)
 
         services = list()
         for response in responses:
@@ -847,11 +859,13 @@ class Mongo(object):
             )
         return services
 
-    def get_blackouts(self, query=None):
+    def get_blackouts(self, tenant, query=None):
+
+        dBase = self._client[tenant]
 
         now = datetime.datetime.utcnow()
 
-        responses = self._db.blackouts.find(query)
+        responses = dBase.blackouts.find(query)
         blackouts = list()
         for response in responses:
             response['id'] = response['_id']
@@ -990,9 +1004,11 @@ class Mongo(object):
 
         return True if response.deleted_count == 1 else False
 
-    def get_heartbeats(self):
+    def get_heartbeats(self, tenant):
 
-        responses = self._db.heartbeats.find()
+        dBase = self._client[tenant]
+
+        responses = dBase.heartbeats.find()
 
         heartbeats = list()
         for response in responses:

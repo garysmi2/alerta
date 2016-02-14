@@ -2,12 +2,12 @@ import datetime
 
 from flask import g, request, render_template
 from flask.ext.cors import cross_origin
-from uuid import uuid4
+#from uuid import uuid4
 
 from alerta.app import app, db
 from alerta.app.switch import Switch
 from alerta.app.auth import auth_required, admin_required
-from alerta.app.utils import jsonify, jsonp, parse_fields, process_alert, getTenant
+from alerta.app.utils import jsonify, jsonp, parse_fields, process_alert, getTenant, generateDBName
 from alerta.app.metrics import Timer
 from alerta.alert import Alert
 from alerta.heartbeat import Heartbeat
@@ -24,6 +24,7 @@ tag_timer = Timer('alerts', 'tagged', 'Tagging alerts', 'Total time to tag numbe
 untag_timer = Timer('alerts', 'untagged', 'Removing tags from alerts', 'Total time to un-tag number of alerts')
 
 
+'''
 @app.route('/_', methods=['OPTIONS', 'PUT', 'POST', 'DELETE', 'GET'])
 @cross_origin()
 @jsonp
@@ -37,8 +38,9 @@ def test():
         args=request.args,
         app_root=app.root_path,
     )
+'''
 
-
+'''
 @app.route('/')
 def index():
 
@@ -47,15 +49,18 @@ def index():
         if rule.endpoint not in ['test', 'static']:
             rules.append(rule)
     return render_template('index.html', rules=rules)
+'''
 
-
-@app.route("/alerts", methods=['OPTIONS', 'GET'])
+@app.route("/alerts/<tenant>", methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
 def get_alerts(tenant):
 
+    tenant = generateDBName(tenant)
+
     gets_started = gets_timer.start_timer()
+
     try:
         query, sort, _, page, limit, query_time = parse_fields(request)
     except Exception as e:
@@ -63,12 +68,12 @@ def get_alerts(tenant):
         return jsonify(status="error", message=str(e)), 400
 
     try:
-        severity_count = db.get_counts(query=query, fields={"severity": 1}, group="severity")
+        severity_count = db.get_counts(tenant, query=query, fields={"severity": 1}, group="severity")
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
     try:
-        status_count = db.get_counts(query=query, fields={"status": 1}, group="status")
+        status_count = db.get_counts(tenant, query=query, fields={"status": 1}, group="status")
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -85,7 +90,7 @@ def get_alerts(tenant):
     fields['history'] = {'$slice': app.config['HISTORY_LIMIT']}
 
     try:
-        alerts = db.get_alerts(query=query, fields=fields, sort=sort, page=page, limit=limit)
+        alerts = db.get_alerts(tenant, query=query, fields=fields, sort=sort, page=page, limit=limit)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -137,11 +142,13 @@ def get_alerts(tenant):
         )
 
 
-@app.route('/alerts/history', methods=['OPTIONS', 'GET'])
+@app.route('/alerts/<tenant>/history', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_history():
+def get_history(tenant):
+
+    tenant = generateDBName(tenant)
 
     try:
         query, _, _, _, limit, query_time = parse_fields(request)
@@ -149,7 +156,7 @@ def get_history():
         return jsonify(status="error", message=str(e)), 400
 
     try:
-        history = db.get_history(query=query, limit=limit)
+        history = db.get_history(tenant, query=query, limit=limit)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -171,21 +178,15 @@ def get_history():
         )
 
 
-@app.route('/alert', methods=['OPTIONS', 'POST'])
+@app.route('/alert/<tenant>', methods=['OPTIONS', 'POST'])
 @cross_origin()
 @auth_required
 @jsonp
-def receive_alert():
+def receive_alert(tenant):
 
     recv_started = receive_timer.start_timer()
 
-    data = request.json
-    tenant = getTenant(data)
-
-    if len(tenant) is 0:
-        return jsonify(status="error", message="Missing mandatory value for tenant"), 400
-
-    tenant = "tenant-" + tenant + "-alerts"
+    tenant = generateDBName(tenant)
 
     try:
         incomingAlert = Alert.parse_alert(request.data)
@@ -223,14 +224,16 @@ def receive_alert():
         return jsonify(status="error", message="insert or update of received alert failed"), 500
 
 
-@app.route('/alert/<id>', methods=['OPTIONS', 'GET'])
+@app.route('/alert/<tenant>/<id>', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_alert(id):
+def get_alert(tenant,id):
+
+    tenant = generateDBName(tenant)
 
     try:
-        alert = db.get_alert(id=id)
+        alert = db.get_alert(tenant, id=id)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -244,21 +247,19 @@ def get_alert(id):
         return jsonify(status="error", message="not found", total=0, alert=None), 404
 
 
-@app.route('/alert/<id>/status', methods=['OPTIONS', 'POST'])
+@app.route('/alert/<tenant>/<id>/status', methods=['OPTIONS', 'POST'])
 @cross_origin()
 @auth_required
 @jsonp
-def set_status(id):
+def set_status(tenant, id):
 
     # FIXME - should only allow role=user to set status for alerts for that customer
     # Above comment is from original code, can ignore it for now
     status_started = status_timer.start_timer()
 
     data = request.json
-    tenant = getTenant(data)
 
-    if len(tenant) is 0:
-        return jsonify(status="error", message= "missing request parameter tenant"), 400
+    tenant = generateDBName(tenant)
 
     if data and 'status' in data:
         try:
@@ -277,11 +278,11 @@ def set_status(id):
         return jsonify(status="error", message="not found"), 404
 
 
-@app.route('/alert/<id>/tag', methods=['OPTIONS', 'POST'])
+@app.route('/alert/<tenant>/<id>/tag', methods=['OPTIONS', 'POST'])
 @cross_origin()
 @auth_required
 @jsonp
-def tag_alert(id):
+def tag_alert(tenant, id):
 
     # FIXME - should only allow role=user to set status for alerts for that customer
     # Above comment is from original code, can ignore for now
@@ -289,10 +290,8 @@ def tag_alert(id):
     tag_started = tag_timer.start_timer()
 
     data = request.json
-    tenant = getTenant(data)
 
-    if len(tenant) is 0:
-        return jsonify(status="error", message= "missing request parameter tenant"), 400
+    tenant = generateDBName(tenant)
 
     if data and 'tags' in data:
         try:
@@ -310,11 +309,11 @@ def tag_alert(id):
         return jsonify(status="error", message="not found"), 404
 
 
-@app.route('/alert/<id>/untag', methods=['OPTIONS', 'POST'])
+@app.route('/alert/<tenant>/<id>/untag', methods=['OPTIONS', 'POST'])
 @cross_origin()
 @auth_required
 @jsonp
-def untag_alert(id):
+def untag_alert(tenant, id):
 
     # FIXME - should only allow role=user to set status for alerts for that customer
     # Above comment is from original code, can ignore for now
@@ -322,12 +321,7 @@ def untag_alert(id):
     untag_started = untag_timer.start_timer()
     data = request.json
 
-    tenant = getTenant(data)
-
-    if len(tenant) is 0:
-        return jsonify(status="error", message= "missing request parameter tenant"), 400
-
-    tenant = "tenant-" + tenant + "-alerts"
+    tenant = generateDBName(tenant)
 
     if data and 'tags' in data:
         try:
@@ -354,7 +348,7 @@ def delete_alert(tenant,id):
 
     started = delete_timer.start_timer()
 
-    tenant = "tenant-" + tenant + "-alerts"
+    tenant = generateDBName(tenant)
 
     try:
         response = db.delete_alert(tenant,id)
@@ -369,11 +363,13 @@ def delete_alert(tenant,id):
 
 
 # Return severity and status counts
-@app.route('/alerts/count', methods=['OPTIONS', 'GET'])
+@app.route('/alerts/<tenant>/count', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_counts():
+def get_counts(tenant):
+
+    tenant = generateDBName(tenant)
 
     try:
         query, _, _, _, _, _ = parse_fields(request)
@@ -381,12 +377,12 @@ def get_counts():
         return jsonify(status="error", message=str(e)), 400
 
     try:
-        severity_count = db.get_counts(query=query, fields={"severity": 1}, group="severity")
+        severity_count = db.get_counts(tenant, query=query, fields={"severity": 1}, group="severity")
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
     try:
-        status_count = db.get_counts(query=query, fields={"status": 1}, group="status")
+        status_count = db.get_counts(tenant, query=query, fields={"status": 1}, group="status")
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -407,11 +403,13 @@ def get_counts():
         )
 
 
-@app.route('/alerts/top10', methods=['OPTIONS', 'GET'])
+@app.route('/alerts/<tenant>/top10', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_top10():
+def get_top10(tenant):
+
+    tenant = generateDBName(tenant)
 
     try:
         query, _, group, _, _, _ = parse_fields(request)
@@ -419,7 +417,7 @@ def get_top10():
         return jsonify(status="error", message=str(e)), 400
 
     try:
-        top10 = db.get_topn(query=query, group=group, limit=10)
+        top10 = db.get_topn(tenant, query=query, group=group, limit=10)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -442,11 +440,13 @@ def get_top10():
         )
 
 
-@app.route('/environments', methods=['OPTIONS', 'GET'])
+@app.route('/environments/<tenant>', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_environments():
+def get_environments(tenant):
+
+    tenant = generateDBName(tenant)
 
     try:
         query, _, _, _, limit, _ = parse_fields(request)
@@ -454,7 +454,7 @@ def get_environments():
         return jsonify(status="error", message=str(e)), 400
 
     try:
-        environments = db.get_environments(query=query, limit=limit)
+        environments = db.get_environments(tenant, query=query, limit=limit)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -473,11 +473,13 @@ def get_environments():
         )
 
 
-@app.route('/services', methods=['OPTIONS', 'GET'])
+@app.route('/services/<tenant>', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_services():
+def get_services(tenant):
+
+    tenant = generateDBName(tenant)
 
     try:
         query, _, _, _, limit, _ = parse_fields(request)
@@ -485,7 +487,7 @@ def get_services():
         return jsonify(status="error", message=str(e)), 400
 
     try:
-        services = db.get_services(query=query, limit=limit)
+        services = db.get_services(tenant, query=query, limit=limit)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -504,15 +506,17 @@ def get_services():
         )
 
 
-@app.route('/blackouts', methods=['OPTIONS', 'GET'])
+@app.route('/blackouts/<tenant>', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @admin_required
 @jsonp
-def get_blackouts():
+def get_blackouts(tenant):
+
+    tenant = generateDBName(tenant)
 
     try:
-        blackouts = db.get_blackouts()
+        blackouts = db.get_blackouts(tenant)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -533,21 +537,16 @@ def get_blackouts():
         )
 
 
-@app.route('/blackout', methods=['OPTIONS', 'POST'])
+@app.route('/blackout/<tenant>', methods=['OPTIONS', 'POST'])
 @cross_origin()
 @auth_required
 @admin_required
 @jsonp
-def create_blackout():
+def create_blackout(tenant):
 
     data = request.json
 
-    tenant = getTenant(data)
-
-    if len(tenant) is 0:
-        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
-
-    tenant = "tenant-" + tenant + "-alerts"
+    tenant = generateDBName(tenant)
 
     if request.json and 'environment' in request.json:
         environment = request.json['environment']
@@ -583,10 +582,7 @@ def create_blackout():
 @jsonp
 def delete_blackout(tenant, blackout):
 
-    if tenant is None or len(tenant.strip()) is 0:
-        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
-
-    tenant = "tenant-" + tenant + "-alerts"
+    tenant = generateDBName(tenant)
 
     try:
         response = db.delete_blackout(tenant, blackout)
@@ -599,14 +595,16 @@ def delete_blackout(tenant, blackout):
         return jsonify(status="error", message="not found"), 404
 
 
-@app.route('/heartbeats', methods=['OPTIONS', 'GET'])
+@app.route('/heartbeats/<tenant>', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_heartbeats():
+def get_heartbeats(tenant):
+
+    tenant = generateDBName(tenant)
 
     try:
-        heartbeats = db.get_heartbeats()
+        heartbeats = db.get_heartbeats(tenant)
     except Exception as e:
         return jsonify(status="error", message=str(e)), 500
 
@@ -635,19 +633,13 @@ def get_heartbeats():
         )
 
 
-@app.route('/heartbeat', methods=['OPTIONS', 'POST'])
+@app.route('/heartbeat/<tenant>', methods=['OPTIONS', 'POST'])
 @cross_origin()
 @auth_required
 @jsonp
-def create_heartbeat():
+def create_heartbeat(tenant):
 
-    data = request.json
-    tenant = getTenant(data)
-
-    if len(tenant) is 0:
-        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
-
-    tenant = "tenant-" + tenant + "-alerts"
+    tenant = generateDBName(tenant)
 
     try:
         heartbeat = Heartbeat.parse_heartbeat(request.data)
@@ -675,11 +667,7 @@ def create_heartbeat():
 @jsonp
 def get_heartbeat(tenant,id):
 
-
-    if tenant is None or len(tenant.strip()) is 0:
-        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
-
-    tenant = "tenant-" + tenant + "-alerts"
+    tenant = generateDBName(tenant)
 
     try:
         heartbeat = db.get_heartbeat(tenant, id=id)
@@ -703,10 +691,7 @@ def get_heartbeat(tenant,id):
 @jsonp
 def delete_heartbeat(tenant, id):
 
-    if tenant is None or len(tenant.strip()) is 0:
-        return jsonify(status="error", message="must supply 'tenant' as parameter"), 400
-
-    tenant = "tenant-" + tenant + "-alerts"
+    tenant =  generateDBName(tenant)
 
     try:
         response = db.delete_heartbeat(tenant, id)
@@ -718,7 +703,7 @@ def delete_heartbeat(tenant, id):
     else:
         return jsonify(status="error", message="not found"), 404
 
-
+'''
 @app.route('/users', methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
@@ -1002,3 +987,4 @@ def delete_key(key):
             return jsonify(status="ok")
         else:
             return jsonify(status="error", message="not found"), 404
+'''
