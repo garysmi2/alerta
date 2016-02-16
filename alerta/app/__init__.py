@@ -16,6 +16,9 @@ app.config.from_object('alerta.settings')
 app.config.from_pyfile('/etc/alertad.conf', silent=True)
 app.config.from_envvar('ALERTA_SVR_CONF_FILE', silent=True)
 
+HOST="127.0.0.1"
+PORT=8080
+
 if 'SECRET_KEY' in os.environ:
     app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
 
@@ -66,6 +69,12 @@ if app.config['CUSTOMER_VIEWS'] and not app.config['ADMIN_USERS']:
     app.logger.error('Customer views is enabled but there are no admin users')
     sys.exit(1)
 
+if app.config['HOST']:
+    HOST=app.config['HOST']
+
+if app.config['PORT']:
+    PORT = app.config['PORT']
+
 cors = CORS(app)
 
 from alerta.app.database import Mongo
@@ -88,5 +97,6 @@ else:
 def main():
     app.logger.info('Starting alerta version %s ...', __version__)
     app.logger.info('Using MongoDB version %s ...', db.get_version())
-    app.run(host='0.0.0.0', port=8080, threaded=True)
+    app.run(HOST, PORT, threaded=True)
+
 

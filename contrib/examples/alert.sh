@@ -1,6 +1,6 @@
 #!/bin/sh
 
-ENDPOINT=${1:-http://localhost:8080}
+ENDPOINT=${1:-http://localhost:8887}
 
 curl -s -XPOST -H "Content-type: application/json" -H "Authorization: Key demo-key" ${ENDPOINT}/alert/nimbus -d '
 {
