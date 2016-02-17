@@ -214,7 +214,6 @@ def process_alert(incomingAlert, tenant):
 ###           pre_plugin_timer.stop_timer(started)
             raise SyntaxError('Plug-in pre-receive hook did not return modified alert')
 ##        pre_plugin_timer.stop_timer(started)
-
     if db.is_blackout_period(incomingAlert, tenant):
         raise RuntimeWarning('Suppressed during blackout period')
 
@@ -234,7 +233,6 @@ def process_alert(incomingAlert, tenant):
     except Exception as e:
         error_counter.inc()
         raise RuntimeError(e)
-
     for plugin in plugins:
 ###        started = post_plugin_timer.start_timer()
         try:

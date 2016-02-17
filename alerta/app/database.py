@@ -115,10 +115,11 @@ class Mongo(object):
 
         return "unset"
 
-    def get_severity(self, alert):
+    def get_severity(self, alert, tenant):
         """
         Get severity of correlated alert. Used to determine previous severity.
         """
+        dBase = self._client[tenant]
         query = {
             "environment": alert.environment,
             "resource": alert.resource,
@@ -134,7 +135,7 @@ class Mongo(object):
             "customer": alert.customer
         }
 
-        return self._db.alerts.find_one(query, projection={"severity": 1, "_id": 0})['severity']
+        return dBase.alerts.find_one(query, projection={"severity": 1, "_id": 0})['severity']
 
     def get_status(self, alert, tenant):
         """
@@ -404,8 +405,8 @@ class Mongo(object):
         """
         dBase = self._client[tenant]
 
-        previous_severity = self.get_severity(alert)
-        previous_status = self.get_status(alert)
+        previous_severity = self.get_severity(alert, tenant)
+        previous_status = self.get_status(alert, tenant)
         trend_indication = severity_code.trend(previous_severity, alert.severity)
         if alert.status == status_code.UNKNOWN:
             status = severity_code.status_from_severity(previous_severity, alert.severity, previous_status)
