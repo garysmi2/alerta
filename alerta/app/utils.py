@@ -198,53 +198,53 @@ def parse_fields(r):
 def process_alert(incomingAlert, tenant):
 
     for plugin in plugins:
-        started = pre_plugin_timer.start_timer()
+###       started = pre_plugin_timer.start_timer()
         try:
             incomingAlert = plugin.pre_receive(incomingAlert)
         except RejectException:
             reject_counter.inc()
-            pre_plugin_timer.stop_timer(started)
+###            pre_plugin_timer.stop_timer(started)
             raise
         except Exception as e:
             error_counter.inc()
-            pre_plugin_timer.stop_timer(started)
+###            pre_plugin_timer.stop_timer(started)
             raise RuntimeError('Error while running pre-receive plug-in: %s' % str(e))
         if not incomingAlert:
             error_counter.inc()
-            pre_plugin_timer.stop_timer(started)
+###           pre_plugin_timer.stop_timer(started)
             raise SyntaxError('Plug-in pre-receive hook did not return modified alert')
-        pre_plugin_timer.stop_timer(started)
+##        pre_plugin_timer.stop_timer(started)
 
     if db.is_blackout_period(incomingAlert, tenant):
         raise RuntimeWarning('Suppressed during blackout period')
 
     try:
         if db.is_duplicate(incomingAlert, tenant):
-            started = duplicate_timer.start_timer()
+###            started = duplicate_timer.start_timer()
             alert = db.save_duplicate(incomingAlert, tenant)
-            duplicate_timer.stop_timer(started, tenant)
+###            duplicate_timer.stop_timer(started, tenant)
         elif db.is_correlated(incomingAlert, tenant):
-            started = correlate_timer.start_timer()
+###           started = correlate_timer.start_timer()
             alert = db.save_correlated(incomingAlert, tenant)
-            correlate_timer.stop_timer(started)
+###            correlate_timer.stop_timer(started)
         else:
-            started = create_timer.start_timer()
+###            started = create_timer.start_timer()
             alert = db.create_alert(incomingAlert, tenant)
-            create_timer.stop_timer(started)
+###            create_timer.stop_timer(started)
     except Exception as e:
         error_counter.inc()
         raise RuntimeError(e)
 
     for plugin in plugins:
-        started = post_plugin_timer.start_timer()
+###        started = post_plugin_timer.start_timer()
         try:
             plugin.post_receive(alert)
         except Exception as e:
             error_counter.inc()
-            post_plugin_timer.stop_timer(started)
+###            post_plugin_timer.stop_timer(started)
             raise RuntimeError('Error while running post-receive plug-in: %s' % str(e))
-        post_plugin_timer.stop_timer(started)
-        post_plugin_timer.stop_timer(started)
+###        post_plugin_timer.stop_timer(started)
+###        post_plugin_timer.stop_timer(started)
 
     return alert
 

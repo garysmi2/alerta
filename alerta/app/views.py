@@ -184,14 +184,14 @@ def get_history(tenant):
 @jsonp
 def receive_alert(tenant):
 
-    recv_started = receive_timer.start_timer()
+##    recv_started = receive_timer.start_timer()
 
     tenant = generateDBName(tenant)
 
     try:
         incomingAlert = Alert.parse_alert(request.data)
     except ValueError as e:
-        receive_timer.stop_timer(recv_started)
+##        receive_timer.stop_timer(recv_started)
         return jsonify(status="error", message=str(e)), 400
 
     if g.get('customer', None):
@@ -205,16 +205,16 @@ def receive_alert(tenant):
     try:
         alert = process_alert(incomingAlert, tenant)
     except RejectException as e:
-        receive_timer.stop_timer(recv_started)
+#        receive_timer.stop_timer(recv_started)
         return jsonify(status="error", message=str(e)), 403
     except RuntimeWarning as e:
-        receive_timer.stop_timer(recv_started)
+#        receive_timer.stop_timer(recv_started)
         return jsonify(status="ok", id=incomingAlert.id, message=str(e)), 202
     except Exception as e:
-        receive_timer.stop_timer(recv_started)
+#        receive_timer.stop_timer(recv_started)
         return jsonify(status="error", message=str(e)), 500
 
-    receive_timer.stop_timer(recv_started)
+#    receive_timer.stop_timer(recv_started)
 
     if alert:
         body = alert.get_body()
