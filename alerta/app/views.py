@@ -339,7 +339,7 @@ def untag_alert(tenant, id):
         return jsonify(status="error", message="not found"), 404
 
 
-@app.route('/alert/<tenant>/<id>', methods=['OPTIONS', 'DELETE', 'POST'])
+@app.route('/alert/<tenant>/<id>', methods=['OPTIONS', 'DELETE'])
 @cross_origin()
 @auth_required
 @admin_required
