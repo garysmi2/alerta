@@ -7,7 +7,7 @@ curl -s -XPOST -H "Content-type: application/json" -H "Authorization: Key demo-k
   "resource": "aac0d57e-4c16-4fd5-bb9b-61aed803a703",
   "event": "HW:NIC:FAILED",
   "group": "Hardware",
-  "severity": "minor",
+  "severity": "debug",
   "environment": "Production",
   "service": [
       "Network"
