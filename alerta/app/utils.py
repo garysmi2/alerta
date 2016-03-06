@@ -2,6 +2,7 @@ import json
 import datetime
 import pytz
 import re
+import ast
 
 from functools import wraps
 from flask import request, g, current_app
@@ -13,6 +14,7 @@ from alerta.plugins import load_plugins, RejectException
 LOG = app.logger
 DB_NAME_PREFIX = "tenant-"
 DB_NAME_SUFFIX = "-alerts"
+TENANT_HEADER_NAME = "X-Tenant-Data"
 
 plugins = load_plugins()
 
@@ -246,17 +248,15 @@ def process_alert(incomingAlert, tenant):
 
     return alert
 
-def getTenant(message):
+def getTenantFromHeader(request):
 
     tenant = ''
 
-    try:
-        tenant = message['tenant']
-    except (KeyError, TypeError) as e:
-        return ""
+    tenantList = request.headers.get(TENANT_HEADER_NAME)
 
-    if tenant is None:
-        return ""
+    if tenantList is not None:
+        tenant = tenantList[1:-1]
+        return tenant
     else:
         return tenant.strip()
 

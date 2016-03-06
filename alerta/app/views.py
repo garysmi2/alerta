@@ -7,11 +7,12 @@ from flask.ext.cors import cross_origin
 from alerta.app import app, db
 from alerta.app.switch import Switch
 from alerta.app.auth import auth_required, admin_required
-from alerta.app.utils import jsonify, jsonp, parse_fields, process_alert, getTenant, generateDBName
+from alerta.app.utils import jsonify, jsonp, parse_fields, process_alert, getTenantFromHeader, generateDBName
 from alerta.app.metrics import Timer
 from alerta.alert import Alert
 from alerta.heartbeat import Heartbeat
 from alerta.plugins import RejectException
+from flask import request
 
 LOG = app.logger
 
@@ -51,14 +52,18 @@ def index():
     return render_template('index.html', rules=rules)
 '''
 
-@app.route("/alerts/<tenant>", methods=['OPTIONS', 'GET'])
+@app.route("/alerts/", methods=['OPTIONS', 'GET'])
 @cross_origin()
 @auth_required
 @jsonp
-def get_alerts(tenant):
+def get_alerts():
+
+    tenant = getTenantFromHeader(request)
+
+    if len(tenant) == 0:
+        return jsonify(status="error", message="bad request"), 400
 
     tenant = generateDBName(tenant)
-
     gets_started = gets_timer.start_timer()
 
     try:
@@ -247,15 +252,22 @@ def get_alert(tenant,id):
         return jsonify(status="error", message="not found", total=0, alert=None), 404
 
 
-@app.route('/alert/<tenant>/<id>/status', methods=['OPTIONS', 'POST'])
+@app.route('/alert/<id>/status', methods=['OPTIONS', 'POST'])
 @cross_origin()
 @auth_required
 @jsonp
-def set_status(tenant, id):
+def set_status(id):
 
     # FIXME - should only allow role=user to set status for alerts for that customer
     # Above comment is from original code, can ignore it for now
+
+
     status_started = status_timer.start_timer()
+
+    tenant = getTenantFromHeader(request)
+
+    if len(tenant) == 0:
+        return jsonify(status="error", message="bad request"), 400
 
     data = request.json
 
