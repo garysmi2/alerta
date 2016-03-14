@@ -2,8 +2,9 @@ import json
 import datetime
 import pytz
 import re
-import ast
+import requests
 
+from requests.auth import HTTPBasicAuth
 from functools import wraps
 from flask import request, g, current_app
 
@@ -264,3 +265,21 @@ def getTenantFromHeader(request):
 def generateDBName(tenant):
 
     return DB_NAME_PREFIX + tenant + DB_NAME_SUFFIX
+
+
+def getSitewhereTenantInfo(tenant):
+
+    auth = HTTPBasicAuth("admin", "password")
+
+    url = 'http://scamps.cit.ie:8888/sitewhere/api/tenants/nimbus'
+
+    response = requests.get(url, auth=auth)
+
+    return response
+
+def getDeviceInfo(url, authToken):
+    auth = HTTPBasicAuth("admin","password")
+
+    response = requests.get(url, auth=auth, headers={"X-Sitewhere-Tenant" : authToken})
+
+    return response

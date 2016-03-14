@@ -7,7 +7,7 @@ from flask.ext.cors import cross_origin
 from alerta.app import app, db
 from alerta.app.switch import Switch
 from alerta.app.auth import auth_required, admin_required
-from alerta.app.utils import jsonify, jsonp, parse_fields, process_alert, getTenantFromHeader, generateDBName
+from alerta.app.utils import jsonify, jsonp, parse_fields, process_alert, getTenantFromHeader, generateDBName, getSitewhereTenantInfo, getDeviceInfo
 from alerta.app.metrics import Timer
 from alerta.alert import Alert
 from alerta.heartbeat import Heartbeat
@@ -52,10 +52,9 @@ def index():
     return render_template('index.html', rules=rules)
 '''
 
-@app.route("/alerts/", methods=['OPTIONS', 'GET'])
+@app.route("/alerts/", methods=['GET'])
 @cross_origin()
 @auth_required
-@jsonp
 def get_alerts():
 
     tenant = getTenantFromHeader(request)
@@ -252,10 +251,8 @@ def get_alert(tenant,id):
         return jsonify(status="error", message="not found", total=0, alert=None), 404
 
 
-@app.route('/alert/<id>/status', methods=['OPTIONS', 'POST'])
+@app.route('/alert/<id>/status', methods=['POST'])
 @cross_origin()
-@auth_required
-@jsonp
 def set_status(id):
 
     # FIXME - should only allow role=user to set status for alerts for that customer
@@ -714,6 +711,42 @@ def delete_heartbeat(tenant, id):
         return jsonify(status="ok")
     else:
         return jsonify(status="error", message="not found"), 404
+
+
+@app.route('/device/<deviceid>', methods=['GET'])
+@cross_origin()
+def get_device(deviceid):
+    tenant = getTenantFromHeader(request)
+
+    if len(tenant) == 0:
+        return jsonify(status="error", message="bad request"), 400
+
+    response = getSitewhereTenantInfo(tenant)
+
+
+    if response and response.status_code is not 200:
+        return jsonify(status=response.reason, message=response.content), response.status_code
+
+    response = response.json()
+
+    try:
+
+        authToken = response['authenticationToken']
+
+        url = "http://scamps.cit.ie:8888/sitewhere/api/devices/" + deviceid
+
+        response = getDeviceInfo(url, authToken)
+
+        print response
+        print response.text
+        print response.request.headers
+        return jsonify(message=response.text), response.status_code
+    except KeyError as ke:
+
+        return jsonify(status="401",message="authentication token missing"), 401
+
+
+
 
 '''
 @app.route('/users', methods=['OPTIONS', 'GET'])

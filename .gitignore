@@ -12,3 +12,6 @@ build
 dist
 rpmbuild
 *~
+.project
+.pydevproject
+.project
